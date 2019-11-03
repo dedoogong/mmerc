@@ -87,3 +87,9 @@ class DecoderRNN(nn.Module):
             outputs[:, t, :] = out
 
         return outputs
+
+def main():
+    print("textFeature start")
+
+if __name__ == '__main__':
+    main()
