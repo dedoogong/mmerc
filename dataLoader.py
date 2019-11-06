@@ -121,8 +121,7 @@ if dataGenerationFLAG:
             # epoch = 200
             # optim = Adam
             '''
-            # TODO : 수/목/ modify gcn/encoder/decoder architecture!
-            # TODO : 금~월 : training and debuging!
+
 
             # Load pre-trained model tokenizer (vocabulary)
             tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -205,64 +204,15 @@ if dataGenerationFLAG:
 
 traindata = np.load('./train.npy')
 tokenSizeList = np.load('./tokenSizeList.npy')
-
-
-# len(result) #9989
-# result[0][0] == N tuples or lists <- actual tokened list of subwords
-# result[0][0][768] == Nx768 <- actual tokened  of subwords
-# word_count_in_utterance=len(result[9989][1])
-# result[9989][1][word_count_in_utterance][768]#word_count_in_utterance <= dynamically change
-# 32 batch
-# TODO : save word embeddings to npy or pickle and reuse it!
-
-################## BertModel
-
-# Load pre-trained model (weights)
-#model = BertModel.from_pretrained('bert-base-uncased')
-#model.eval()
-#model.to('cuda')
-
 utts = []
-
-speakers = []
-speakerIDs = []
-
-emotions = []
-emotionIDs = []
-
-sentiments = []
-sentimentIDs = []
-
-dialogueIDs = []
-utteranceIDs = []
-
 count = 0
-
 with open(csvPath, newline='') as csvfile:
     reader = csv.reader(csvfile, delimiter=',')
     for row in reader:
         count += 1
-
         if count == 1:
             continue
         utts.append(row[1])
-        speakers.append(row[2])
-        emotions.append(row[3])
-        sentiments.append(row[4])
-        dialogueIDs.append(int(row[5]))
-        utteranceIDs.append(int(row[6]))
-
-    speakersNetList = list(set(speakers))
-    emotionsNetList = list(set(emotions))
-    sentimentsNetList = list(set(sentiments))
-
-    for s in speakers:
-        speakerIDs.append(speakersNetList.index(s))
-    for e in emotions:
-        emotionIDs.append(emotionsNetList.index(e))
-    for s in sentiments:
-        sentimentIDs.append(sentimentsNetList.index(s))
-
     print('----------------------------------------------')
 
 num_iteration=len(utts)
@@ -274,9 +224,50 @@ for i in range(num_epoch):
 
         tokenSize=tokenSizeList[0,j]
         text = traindata[0,offset:offset+tokenSize*768]
-        offset+=tokenSize*768
 
+        offset+=tokenSize*768
+        text=np.reshape(text, (-1, 768))
         print(j + 1, 'input.shape:', len(text)) #text.shape)
+        # TODO : 수 - A with edge weighting!! <- similarity 는 seq2vec로 해야겠다!! sim값을 seq2vec로 뽑아서 graph의 edge에 넣은다음 아래와같이 계산하면 됨.
+        # TODO : 목 - modify gcn/encoder/decoder architecture! 각각 f1,f2,f3사이즈의 3 개 커널== 3개 입력 채널/ fout 피쳐맵 개수==embedding size ==64 :: conv(3,64)!
+        # TODO : 금~월 - training and debugging! / biLSTM naver돌리기
+        # TODO : 역겨움/무서움 등 안되는건 데이터 불균형 때문이었네. 중립이 너무 압도적 많고, 저런건 너무 너무 거의 없음;;;;
+        '''
+        if tf_par=="word2vec":
+            for u,v,d in dG.edges(data=True):
+                if 'w2vec' in d:  
+                    # dice = (2*d['weight'])/(dG.node[u]['count']+dG.node[v]['count'])
+                    # dG.edge[u][v]['weight'] = dice * (dG.node[u]['count']*dG.node[v]['count'])/((d['w2vec'])**2)
+
+                    # d['weight'] = (dG.node[u]['count']*dG.node[v]['count'])/((1-d['w2vec']))
+
+                    ## angular
+
+                    # dice = (2*d['weight'])/(dG.node[u]['count']+dG.node[v]['count'])
+                    # f = (dG.node[u]['count']*dG.node[v]['count'])/(d['w2vec']**2)
+                    # print d['w2vec']
+                    # d['weight'] = d['weight']/(d['w2vec'])
+                    # if u not in counter_word2vec:
+                    #     counter_word2vec.append(u)
+                    #
+                    # if v not in counter_word2vec:
+                    #     counter_word2vec.append(v)
+
+                    ## my_w2v_similarity
+                    dG.edge[u][v]['w2vec'] = np.arccos(d['w2vec'])/math.pi
+                    dG.edge[u][v]['w2vec'] = 1-dG.edge[u][v]['w2vec']
+                    dG.edge[u][v]['weight'] = dG.edge[u][v]['w2vec']
+
+                    ## attraction score
+                    # d['w2vec'] = np.arccos(d['w2vec'])/math.pi
+                    # f_u_v = float(dG.node[u]['count']*dG.node[v]['count'])/(d['w2vec']**2)
+                    # dice = float(2*d['weight'])/(dG.node[u]['count']+dG.node[v]['count'])
+                    # dG.edge[u][v]['weight'] = f_u_v * dice
+
+                else:
+                    dG.edge[u][v]['weight'] = 0.0001
+                    # dG.edge[u][v]['weight'] = 1-dG.edge[u][v]['weight']
+        '''
         # input = torch.tensor(input).to(device)
         '''
         # zero the gradients
