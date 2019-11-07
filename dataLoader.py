@@ -1,10 +1,11 @@
 import csv
 import glob
+import sys
 
 import mxnet as mx
 from bert_embedding import BertEmbedding
 from textFeature.textFeatures import DecoderRNN as decoder, EncoderCNN as encoder
-from gcn.gcn import Model as stgcn
+from gcn.gcn import Model as stgcn # from net.st_gcn import Model as pitcherModel
 import pickle
 import argparse
 import torch
@@ -27,6 +28,90 @@ num_epoch=200
 num_iteration=0
 device=torch.device('cuda')
 max_utt_length=0
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='End-to-end inference')
+    parser.add_argument(
+        '--cfg',
+        dest='cfg',
+        help='cfg model file (/path/to/model_config.yaml)',
+        default=None,
+        type=str
+    )
+    parser.add_argument(
+        '--wts',
+        dest='weights',
+        help='weights model file (/path/to/model_weights.pkl)',
+        default=None,
+        type=str
+    )
+    parser.add_argument(
+        '--output-dir',
+        dest='output_dir',
+        help='directory for visualization pdfs (default: /tmp/infer_simple)',
+        default='/tmp/infer_simple',
+        type=str
+    )
+    parser.add_argument(
+        '--image-ext',
+        dest='image_ext',
+        help='image file name extension (default: jpg)',
+        default='jpg',
+        type=str
+    )
+    parser.add_argument(
+        '--always-out',
+        dest='out_when_no_box',
+        help='output image even when no object is found',
+        action='store_true'
+    )
+    parser.add_argument(
+        '--output-ext',
+        dest='output_ext',
+        help='output image file format (default: pdf)',
+        default='pdf',
+        type=str
+    )
+    parser.add_argument(
+        '--thresh',
+        dest='thresh',
+        help='Threshold for visualizing detections',
+        default=0.7,
+        type=float
+    )
+    parser.add_argument(
+        '--kp-thresh',
+        dest='kp_thresh',
+        help='Threshold for visualizing keypoints',
+        default=2.0,
+        type=float
+    )
+
+    parser.add_argument('-w', '--work_dir', default='./work_dir/tmp', help='the work folder for storing results')
+    parser.add_argument('-c', '--config', default=None, help='path to the configuration file')
+
+    # processor
+    # parser.add_argument('--use_gpu', type=str2bool, default=True, help='use GPUs or not')
+    parser.add_argument('--device', type=int, default=0, nargs='+', help='the indexes of GPUs for training or testing')
+
+    # visulize and debug
+    # parser.add_argument('--print_log', type=str2bool, default=True, help='print logging or not')
+    # parser.add_argument('--save_log', type=str2bool, default=True, help='save logging or not')
+
+    # model
+    parser.add_argument('--model', default=None, help='the model will be used')
+    # parser.add_argument('--model_args', action=DictAction, default=dict(), help='the arguments of model')
+    parser.add_argument('--st_weights', default=None, help='the weights for network initialization')
+    parser.add_argument('--ignore_weights', type=str, default=[], nargs='+',
+                        help='the name of weights which will be ignored in the initialization')
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(1)
+
+    return parser.parse_args()
+
 if dataGenerationFLAG:
     ''''''
     utts=[]
@@ -121,8 +206,6 @@ if dataGenerationFLAG:
             # epoch = 200
             # optim = Adam
             '''
-
-
             # Load pre-trained model tokenizer (vocabulary)
             tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
@@ -229,9 +312,9 @@ for i in range(num_epoch):
         text=np.reshape(text, (-1, 768))
         print(j + 1, 'input.shape:', len(text)) #text.shape)
         # TODO : 수 - A with edge weighting!! <- similarity 는 seq2vec로 해야겠다!! sim값을 seq2vec로 뽑아서 graph의 edge에 넣은다음 아래와같이 계산하면 됨.
-        # TODO : 목 - modify gcn/encoder/decoder architecture! 각각 f1,f2,f3사이즈의 3 개 커널== 3개 입력 채널/ fout 피쳐맵 개수==embedding size ==64 :: conv(3,64)!
+        # TODO : 목 - modify gcn/encoder/decoder architecture!
         # TODO : 금~월 - training and debugging! / biLSTM naver돌리기
-        # TODO : 역겨움/무서움 등 안되는건 데이터 불균형 때문이었네. 중립이 너무 압도적 많고, 저런건 너무 너무 거의 없음;;;;
+        # TODO : 역겨움/무서움 등 안되는건 데이터 불균형 때문이었네. 중립이 너무 압도적 많고, 저런건 너무 너무 거의 없음;
         '''
         if tf_par=="word2vec":
             for u,v,d in dG.edges(data=True):
@@ -291,3 +374,85 @@ for i in range(num_epoch):
         # epoch = 200
         # optim = Adam
         '''
+
+def init_environment(args):
+    '''
+    init_io = IO(
+        args.work_dir,
+        save_log=args.save_log,
+        print_log=args.print_log)
+
+    init_io.save_arg(args)
+    '''
+    gpus = visible_gpu(args.device)
+    occupy_gpu(gpus)
+
+    # return gpus, init_io
+    return gpus
+
+def load_model_(model, model_text, **model_args):
+    model = model(**model_args)
+    model_text += '\n\n' + str(model)
+    return model, model_text
+
+def load_model(args):
+    model_text = ''
+    model, model_text = load_model_(args.model, model_text, **(args.model_args))
+    return model, model_text
+
+def load_weights_(model, weights_path, ignore_weights=None):
+    if ignore_weights is None:
+        ignore_weights = []
+    if isinstance(ignore_weights, str):
+        ignore_weights = [ignore_weights]
+
+    weights = torch.load(weights_path)
+    weights = OrderedDict([[k.split('module.')[-1],
+                            v.cpu()] for k, v in weights.items()])
+
+    # filter weights
+    for i in ignore_weights:
+        ignore_name = list()
+        for w in weights:
+            if w.find(i) == 0:
+                ignore_name.append(w)
+        for n in ignore_name:
+            weights.pop(n)
+
+    try:
+        model.load_state_dict(weights)
+    except (KeyError, RuntimeError):
+        state = model.state_dict()
+        state.update(weights)
+        model.load_state_dict(state)
+    return model
+
+def load_weights(args, model):
+    if args.weights:
+        model = load_weights_(model, args.weights, args.ignore_weights)
+        return model
+
+channel_count=1
+num_class= 7
+layout = 'coco'
+args = parse_args()
+args.model = 'net.st_gcn.Model'
+args.model_args = {'in_channels': channel_count, 'num_class': num_class, 'edge_importance_weighting': True,
+                   'graph_args': {'layout': layout, 'strategy': 'spatial'}}
+args.use_gpu = True
+#args.weights = '/home/lee/st-gcn/work_dir/recognition/kinetics_skeleton/ST_GCN/epoch50_model.pt'
+#args.work_dir = './work_dir/recognition/kinetics_skeleton/ST_GCN'
+gpus = init_environment(args)
+model_pitcher, model_text = load_model(args)
+model_pitcher = load_weights(args, model_pitcher)
+stgcn_gpu = "cuda:1"
+stgcn_pitcher = model_pitcher.to(stgcn_gpu)
+stgcn_pitcher.eval()
+stgcn_input = np.zeros((channel_count), dtype=np.float32)
+data = torch.from_numpy(stgcn_input)
+data = data.unsqueeze(0)
+# data = data.float().to(stgcn_gpu).detach()
+data = data.float().to(stgcn_gpu)
+output = stgcn(data)
+output_cpu = output.data.cpu().numpy()
+label = np.argmax(output_cpu)
