@@ -1,0 +1,7 @@
+
+Shape of features:(2813, 23206)
+Collection training Number of nodes:23206
+collection training Number of edges:273508
+Accuracy in training set:0.9996445076430857
+Macro:(0.9996648793565683, 0.9997716894977169, 0.9997181198964764, None)
+Micro:(0.9996445076430857, 0.9996445076430857, 0.9996445076430857, None)

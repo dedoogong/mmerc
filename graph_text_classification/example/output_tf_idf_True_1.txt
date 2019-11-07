@@ -1,0 +1,15 @@
+Features shape:(2813, 23506)
+Accuracy in testing set:0.9018759018759018
+Macro test:(0.8953877424262002, 0.8711327256679724, 0.8818344340891607, None)
+Micro test:(0.9018759018759018, 0.9018759018759018, 0.9018759018759018, None)
+             precision    recall  f1-score   support
+
+     course     0.9609    0.9486    0.9547       311
+    faculty     0.8895    0.8496    0.8691       379
+    project     0.8385    0.7267    0.7786       150
+    student     0.8927    0.9597    0.9250       546
+
+avg / total     0.9013    0.9019    0.9005      1386
+
+
+Significance:0.0003713401159383166 True
